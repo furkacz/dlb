@@ -1,7 +1,9 @@
 import argparse
 import os
+import numpy as np
 import json
 from utils import create_model, create_dataset, load_dataset
+from sklearn.preprocessing import MultiLabelBinarizer
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--name", type=str, required=True)
@@ -24,10 +26,18 @@ test_dataset = create_dataset(x_test, y_test, is_training=False)
 model = create_model(len(labels))
 model.load_weights(args.model)
 
-results = { 'train' : {}, 'val' : {}, 'test' : {} }
-results['train']['loss'], results['train']['accuracy'], results['train']['mae'], results['train']['mse'], results['train']['macro_f1'] = model.evaluate(train_dataset)
-results['val']['loss'], results['val']['accuracy'], results['val']['mae'], results['val']['mse'], results['val']['macro_f1'] = model.evaluate(val_dataset)
-results['test']['loss'], results['test']['accuracy'], results['test']['mae'], results['test']['mse'], results['test']['macro_f1'] = model.evaluate(test_dataset)
+with open(f"{name}/labels.json", "r") as f:
+    labels = json.load(f)
 
-with open(f"{name}/results.json", "w") as f:
-    json.dump(results, f)
+mlb = MultiLabelBinarizer()
+mlb.fit_transform([labels])
+original = mlb.inverse_transform(np.array(y_test))
+
+results = np.round(model.predict(test_dataset))
+predicted = mlb.inverse_transform(np.array(results))
+
+with open(name + "/original.json", "w") as f:
+    json.dump(original, f)
+
+with open(name + "/predicted.json", "w") as f:
+    json.dump(predicted, f)

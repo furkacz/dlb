@@ -23,23 +23,26 @@ test_dataset = create_dataset(x_test, y_test)
 model = create_model(len(labels))
 
 model_checkpoint = tf.keras.callbacks.ModelCheckpoint(
-    filepath=name + "/model/{epoch:02d}-{val_loss:.2f}.keras",
-    monitor="val_f1_score",
+    filepath=name + "/model/best.keras",
+    monitor="val_macro_f1",
     verbose=1,
+    mode='max',
+    save_best_only=True,
+    initial_value_threshold=0.0
 )
 
 early_stopping = tf.keras.callbacks.EarlyStopping(
-    monitor="val_f1_score", patience=5, verbose=1, start_from_epoch=0
+    monitor="val_macro_f1", patience=5, verbose=1, start_from_epoch=0, mode='max'
 )
 
 history = model.fit(
     train_dataset,
     validation_data=val_dataset,
     epochs=args.epochs,
-    callbacks=[model_checkpoint],
+    callbacks=[model_checkpoint, early_stopping],
 )
 
-model.evaluate(test_dataset)
+# model.evaluate(test_dataset)
 
 # save history
 import json
