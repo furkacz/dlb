@@ -1,0 +1,1 @@
+Provide images used for testing the model with corresponding *test.json* containing expected labels for each image.

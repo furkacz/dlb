@@ -1,120 +1,118 @@
-import tensorflow as tf
-from tensorflow.keras import layers  # type: ignore
-import pandas as pd
-import numpy as np
 import os
 
+import tensorflow as tf
+import pandas as pd
+import numpy as np
 from skmultilearn.model_selection import iterative_train_test_split
 from sklearn.model_selection import train_test_split
+from tensorboard.plugins.hparams import api as hp
 
-BATCH_SIZE = 128
-SHUFFLE_BUFFER_SIZE = 512
+
+@tf.function
+def hamming_loss(y_true, y_pred):
+    y_pred = y_pred > 0.5
+
+    y_true = tf.cast(y_true, tf.int32)
+    y_pred = tf.cast(y_pred, tf.int32)
+
+    nonzero = tf.cast(tf.math.count_nonzero(y_true - y_pred, axis=-1), tf.float32)
+    return nonzero / y_true.get_shape()[-1]
+
+
+HP_IMAGE_SIZE = hp.HParam('image_size', hp.Discrete([128, 256]))
+HP_DROPOUT = hp.HParam('dropout', hp.Discrete([0.0, 0.1, 0.2, 0.3, 0.4, 0.5]))
+HP_DENSE_SIZE = hp.HParam('dense_size', hp.Discrete([128, 256]))
+HP_LEARNING_RATE = hp.HParam('learning_rate', hp.Discrete([0.0001, 0.0005, 0.001, 0.005]))
+HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([64]))
+
 AUTOTUNE = tf.data.experimental.AUTOTUNE
+LOSS = tf.keras.losses.BinaryCrossentropy()
+METRICS = [
+    tf.keras.metrics.F1Score(average='weighted', threshold=0.5, name='f1_weighted'),
+    hamming_loss,
+]
 
-@tf.function
-def macro_soft_f1(y, y_hat):
-    """Compute the macro soft F1-score as a cost (average 1 - soft-F1 across all labels).
-    Use probability values instead of binary predictions.
-    
-    Args:
-        y (int32 Tensor): targets array of shape (BATCH_SIZE, N_LABELS)
-        y_hat (float32 Tensor): probability matrix from forward propagation of shape (BATCH_SIZE, N_LABELS)
-        
-    Returns:
-        cost (scalar Tensor): value of the cost function for the batch
-    """
-    y = tf.cast(y, tf.float32)
-    y_hat = tf.cast(y_hat, tf.float32)
-    tp = tf.reduce_sum(y_hat * y, axis=0)
-    fp = tf.reduce_sum(y_hat * (1 - y), axis=0)
-    fn = tf.reduce_sum((1 - y_hat) * y, axis=0)
-    soft_f1 = 2*tp / (2*tp + fn + fp + 1e-16)
-    cost = 1 - soft_f1 # reduce 1 - soft-f1 in order to increase soft-f1
-    macro_cost = tf.reduce_mean(cost) # average on all labels
-    return macro_cost
 
-@tf.function
-def macro_f1(y, y_hat, thresh=0.5):
-    """Compute the macro F1-score on a batch of observations (average F1 across labels)
-    
-    Args:
-        y (int32 Tensor): labels array of shape (BATCH_SIZE, N_LABELS)
-        y_hat (float32 Tensor): probability matrix from forward propagation of shape (BATCH_SIZE, N_LABELS)
-        thresh: probability value above which we predict positive
-        
-    Returns:
-        macro_f1 (scalar Tensor): value of macro F1 for the batch
-    """
-    y_pred = tf.cast(tf.greater(y_hat, thresh), tf.float32)
-    tp = tf.cast(tf.math.count_nonzero(y_pred * y, axis=0), tf.float32)
-    fp = tf.cast(tf.math.count_nonzero(y_pred * (1 - y), axis=0), tf.float32)
-    fn = tf.cast(tf.math.count_nonzero((1 - y_pred) * y, axis=0), tf.float32)
-    f1 = 2*tp / (2*tp + fn + fp + 1e-16)
-    macro_f1 = tf.reduce_mean(f1)
-    return macro_f1
-
-def parse_function(filename, label):
+def parse_function(filename, label, size):
     img = tf.io.read_file(filename)
     img = tf.image.decode_jpeg(img, channels=3)
     img = tf.image.convert_image_dtype(img, tf.float32)
-    img = tf.image.resize(img, [256, 256])
+    img = tf.image.resize(img, [size, size])
     return img, label
-def create_dataset(filenames, labels, is_training=True):
+
+
+def create_dataset(filenames, labels, hparams, is_training=True):
     dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
-    dataset = dataset.map(parse_function, num_parallel_calls=AUTOTUNE)
+    dataset = dataset.map(lambda f,l: parse_function(f, l, hparams[HP_IMAGE_SIZE]), num_parallel_calls=AUTOTUNE)
     if is_training:
-        #dataset = dataset.cache()
-        dataset = dataset.shuffle(buffer_size=SHUFFLE_BUFFER_SIZE)
-    dataset = dataset.batch(BATCH_SIZE)
+        # dataset = dataset.cache()
+        dataset = dataset.shuffle(buffer_size=hparams[HP_BATCH_SIZE])
+    dataset = dataset.batch(hparams[HP_BATCH_SIZE])
     dataset = dataset.prefetch(buffer_size=AUTOTUNE)
 
     return dataset
-def create_model(number_of_classes):
+
+
+def create_model(number_of_classes, hparams):
+    resnet = tf.keras.applications.ResNet50(include_top=False, input_shape=(hparams[HP_IMAGE_SIZE],hparams[HP_IMAGE_SIZE],3), pooling='avg', classes=number_of_classes, weights='imagenet')
+    for layer in resnet.layers:
+        layer.trainable = False
+
     data_augmentation = tf.keras.Sequential(
         [
-            layers.RandomFlip("horizontal"),
-            layers.RandomRotation(0.1),
-            layers.RandomZoom(0.3),
-            layers.RandomContrast(0.5),
+            tf.keras.layers.RandomFlip('horizontal'),
+            tf.keras.layers.RandomRotation(0.1),
+            tf.keras.layers.RandomZoom(0.3),
+            tf.keras.layers.RandomContrast(0.5),
         ]
     )
+
     model = tf.keras.Sequential(
         [
             data_augmentation,
-            layers.Conv2D(16, 5, padding="same", activation="relu"),
-            layers.MaxPooling2D(),
-            #layers.Dropout(0.05),
-            layers.Conv2D(32, 5, padding="same", activation="relu"),
-            layers.MaxPooling2D(),
-            #layers.Dropout(0.1),
-            layers.Conv2D(64, 5, padding="same", activation="relu"),
-            layers.MaxPooling2D(),
-            layers.Flatten(),
-            #layers.Dense(256, activation="relu"),
-            
-            layers.Dense(256, activation="relu"),
-            layers.Dropout(0.4),
-            layers.Dense(number_of_classes, name="outputs", activation="sigmoid"),
+            resnet,
+            tf.keras.layers.Flatten(),
+            tf.keras.layers.Dense(hparams[HP_DENSE_SIZE] * 2, activation='relu'),
+            tf.keras.layers.Dropout(hparams[HP_DROPOUT]),
+            tf.keras.layers.Dense(hparams[HP_DENSE_SIZE], activation='relu'),
+            tf.keras.layers.Dropout(hparams[HP_DROPOUT]),
+            tf.keras.layers.Dense(number_of_classes, activation='sigmoid'),
         ]
     )
 
-    model.build(input_shape=(None, 256, 256, 3))
-
-    adam = tf.keras.optimizers.Adam(learning_rate=0.0001)
+    model.build(input_shape=(None, hparams[HP_IMAGE_SIZE], hparams[HP_IMAGE_SIZE], 3))
 
     model.compile(
-        optimizer=adam,
-        loss=macro_soft_f1,
-        metrics=[
-            "accuracy",
-            "mae",
-            "mse",
-            # "binary_crossentropy",
-            macro_f1
-        ],
+        optimizer=tf.keras.optimizers.Adam(learning_rate=hparams[HP_LEARNING_RATE]),
+        loss=LOSS,
+        metrics=METRICS
     )
 
     return model
+
+
+def for_hparams(function, run=None):
+    run_count = 0
+    for image_size in HP_IMAGE_SIZE.domain.values:
+        for batch_size in HP_BATCH_SIZE.domain.values:
+            for dense_size in HP_DENSE_SIZE.domain.values:
+                for dropout in HP_DROPOUT.domain.values:
+                    for learning_rate in HP_LEARNING_RATE.domain.values:
+                        if run is not None and run_count != run:
+                            run_count += 1
+                            continue
+                        hparams = {
+                            HP_IMAGE_SIZE: image_size,
+                            HP_BATCH_SIZE: batch_size,
+                            HP_DENSE_SIZE: dense_size,
+                            HP_DROPOUT: dropout,
+                            HP_LEARNING_RATE: learning_rate,
+                        }
+
+                        function(hparams, run_count)
+
+                        run_count += 1
+
 
 
 def split_data(x, y, ratio, random_state=None, merge_train_val=False):
@@ -151,16 +149,12 @@ def iterative_split_data(x, y, ratio, random_state=None, merge_train_val=False):
 
 
 def load_dataset(name):
-    train = pd.read_json(f"{name}/train.json", orient="records")
-    val = pd.read_json(f"{name}/val.json", orient="records")
-    test = pd.read_json(f"{name}/test.json", orient="records")
-    labels = pd.read_json(f"{name}/labels.json", orient="records")
+    train = pd.read_json(f'{name}/train.json', orient='records')
+    val = pd.read_json(f'{name}/val.json', orient='records')
+    test = pd.read_json(f'{name}/test.json', orient='records')
+    labels = pd.read_json(f'{name}/labels.json', orient='records')
 
     return train, val, test, labels
-
-
-def get_id(x):
-    return int(x.split(".")[0])
 
 
 def split_and_save(data, labels, ratio, name, random_state=None, merge_train_val=False, iterative=False):
@@ -172,11 +166,10 @@ def split_and_save(data, labels, ratio, name, random_state=None, merge_train_val
         train, val, test = split_data(
             data, labels, ratio, random_state=random_state, merge_train_val=merge_train_val
         )
-    
 
-    train = pd.DataFrame(zip(*train), columns=["id", "labels"])
-    val = pd.DataFrame(zip(*val), columns=["id", "labels"])
-    test = pd.DataFrame(zip(*test), columns=["id", "labels"])
+    train = pd.DataFrame(zip(*train), columns=['id', 'labels'])
+    val = pd.DataFrame(zip(*val), columns=['id', 'labels'])
+    test = pd.DataFrame(zip(*test), columns=['id', 'labels'])
 
     train['id'] = train['id'].apply(lambda x: x[0])
     val['id'] = val['id'].apply(lambda x: x[0])
@@ -189,6 +182,27 @@ def save(train, val, test, name):
     if not os.path.exists(name):
         os.makedirs(name)
 
-    train.to_json(f"{name}/train.json", orient="records")
-    val.to_json(f"{name}/val.json", orient="records")
-    test.to_json(f"{name}/test.json", orient="records")
+    train.to_json(f'{name}/train.json', orient='records')
+    val.to_json(f'{name}/val.json', orient='records')
+    test.to_json(f'{name}/test.json', orient='records')
+
+
+def get_metric_name(metric):
+    try:
+        return metric.name
+    except:
+        try:
+            return metric.__name__
+        except:
+            return str(metric)
+
+
+def get_metric_value(metric, y_true, y_pred):
+    try:
+        metric.update_state(y_true, y_pred)
+        return np.average(metric.result())
+    except:
+        try:
+            return np.average(metric(y_true, y_pred))
+        except:
+            return -1.0

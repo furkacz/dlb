@@ -1,0 +1,1 @@
+Download [Fashion dataset](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-dataset) then drop *images* and *styles.csv* in here.

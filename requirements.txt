@@ -5,3 +5,5 @@ tensorrt
 matplotlib
 pandas
 numpy
+psutil
+fastapi

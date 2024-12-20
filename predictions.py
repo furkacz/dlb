@@ -1,43 +1,56 @@
+# generates predictions based on the best model for testset
+
 import argparse
-import os
-import numpy as np
+from os.path import dirname, join
 import json
-from utils import create_model, create_dataset, load_dataset
+
+import pandas as pd
+import numpy as np
 from sklearn.preprocessing import MultiLabelBinarizer
 
+from utils import create_model, create_dataset, get_metric_name, get_metric_value, for_hparams, METRICS
+
+
 parser = argparse.ArgumentParser()
-parser.add_argument("--name", type=str, required=True)
-parser.add_argument("--model", type=str, required=False)
+parser.add_argument('--splits', type=str, default='splits')
+parser.add_argument('--imagesdir', type=str, default='testset/images')
+parser.add_argument('--truth', type=str, default='testset/truth.json')
+parser.add_argument('--run', type=str, default=0)
 
 args = parser.parse_args()
+splits = args.splits
+imagesdir = args.imagesdir
+truth = args.truth
+run = args.run
 
-name = args.name
+truthlabels = []
+with open(truth, "r") as f:
+    truthlabels = json.load(f)
+testdata = pd.DataFrame([{'id': join(imagesdir, f'{i + 1}.jpg'), 'labels': l} for i,l in enumerate(truthlabels)])
 
-train, val, test, labels = load_dataset(name)
-
-x_train, y_train = train['id'].to_list(), train['labels'].to_list()
-x_val, y_val = val['id'].to_list(), val['labels'].to_list()
-x_test, y_test = test['id'].to_list(), test['labels'].to_list()
-
-train_dataset = create_dataset(x_train, y_train, is_training=False)
-val_dataset = create_dataset(x_val, y_val, is_training=False)
-test_dataset = create_dataset(x_test, y_test, is_training=False)
-
-model = create_model(len(labels))
-model.load_weights(args.model)
-
-with open(f"{name}/labels.json", "r") as f:
+labels = []
+with open(f"{splits}/labels.json", "r") as f:
     labels = json.load(f)
 
-mlb = MultiLabelBinarizer()
-mlb.fit_transform([labels])
-original = mlb.inverse_transform(np.array(y_test))
+mlb = MultiLabelBinarizer(classes=labels)
+truthlabels = np.array(mlb.fit_transform(truthlabels), np.float32)
 
-results = np.round(model.predict(test_dataset))
-predicted = mlb.inverse_transform(np.array(results))
+def predictions(hparams, run):
+    run_name = f'run-{run}'
+    run_path = join('runs', run_name)
 
-with open(name + "/original.json", "w") as f:
-    json.dump(original, f)
+    testset = create_dataset(testdata['id'].to_list(), testdata['labels'].to_list(), hparams, is_training=False)
 
-with open(name + "/predicted.json", "w") as f:
-    json.dump(predicted, f)
+    model = create_model(len(labels), hparams)
+    model.load_weights(join(run_path, 'best.keras'))
+
+    results = np.array(np.round(model.predict(testset)), np.float32)
+    predicted = mlb.inverse_transform(results)
+    with open(join(dirname(truth), 'predicted.json'), 'w') as f:
+        json.dump(predicted, f, indent=2)
+
+    score = {get_metric_name(metric):float(get_metric_value(metric, truthlabels, results)) for metric in METRICS}
+    with open(join(dirname(truth), 'score.json'), 'w') as f:
+        json.dump(score, f, indent=2)
+
+for_hparams(predictions, run)
