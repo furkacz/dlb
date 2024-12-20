@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MultiLabelBinarizer
 
-from utils import create_model, create_dataset, get_metric_name, get_metric_value, for_hparams, METRICS
+from utils import create_model, create_dataset, get_metric_name, get_metric_value, get_hparams, METRICS
 
 
 parser = argparse.ArgumentParser()
@@ -23,34 +23,30 @@ imagesdir = args.imagesdir
 truth = args.truth
 run = args.run
 
-truthlabels = []
-with open(truth, "r") as f:
-    truthlabels = json.load(f)
-testdata = pd.DataFrame([{'id': join(imagesdir, f'{i + 1}.jpg'), 'labels': l} for i,l in enumerate(truthlabels)])
+hparams = get_hparams(run)
+run_path = join('runs', f'run-{run}')
 
 labels = []
 with open(f"{splits}/labels.json", "r") as f:
     labels = json.load(f)
-
 mlb = MultiLabelBinarizer(classes=labels)
+
+truthlabels = []
+with open(truth, "r") as f:
+    truthlabels = json.load(f)
 truthlabels = np.array(mlb.fit_transform(truthlabels), np.float32)
 
-def predictions(hparams, run):
-    run_name = f'run-{run}'
-    run_path = join('runs', run_name)
+testdata = pd.DataFrame([{'id': join(imagesdir, f'{i + 1}.jpg'), 'labels': l} for i,l in enumerate(truthlabels)])
+testset = create_dataset(testdata['id'].to_list(), testdata['labels'].to_list(), hparams, is_training=False)
 
-    testset = create_dataset(testdata['id'].to_list(), testdata['labels'].to_list(), hparams, is_training=False)
+model = create_model(len(labels), hparams)
+model.load_weights(join(run_path, 'best.keras'))
 
-    model = create_model(len(labels), hparams)
-    model.load_weights(join(run_path, 'best.keras'))
+results = np.array(np.round(model.predict(testset)), np.float32)
+predicted = mlb.inverse_transform(results)
+with open(join(dirname(truth), 'predicted.json'), 'w') as f:
+    json.dump(predicted, f, indent=2)
 
-    results = np.array(np.round(model.predict(testset)), np.float32)
-    predicted = mlb.inverse_transform(results)
-    with open(join(dirname(truth), 'predicted.json'), 'w') as f:
-        json.dump(predicted, f, indent=2)
-
-    score = {get_metric_name(metric):float(get_metric_value(metric, truthlabels, results)) for metric in METRICS}
-    with open(join(dirname(truth), 'score.json'), 'w') as f:
-        json.dump(score, f, indent=2)
-
-for_hparams(predictions, run)
+score = {get_metric_name(metric):float(get_metric_value(metric, truthlabels, results)) for metric in METRICS}
+with open(join(dirname(truth), 'score.json'), 'w') as f:
+    json.dump(score, f, indent=2)

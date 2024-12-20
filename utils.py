@@ -91,7 +91,7 @@ def create_model(number_of_classes, hparams):
     return model
 
 
-def for_hparams(function, run=None):
+def get_hparams(run):
     run_count = 0
     for image_size in HP_IMAGE_SIZE.domain.values:
         for batch_size in HP_BATCH_SIZE.domain.values:
@@ -101,6 +101,23 @@ def for_hparams(function, run=None):
                         if run is not None and run_count != run:
                             run_count += 1
                             continue
+                        return {
+                            HP_IMAGE_SIZE: image_size,
+                            HP_BATCH_SIZE: batch_size,
+                            HP_DENSE_SIZE: dense_size,
+                            HP_DROPOUT: dropout,
+                            HP_LEARNING_RATE: learning_rate,
+                        }
+                        
+
+
+def for_hparams(function):
+    run_count = 0
+    for image_size in HP_IMAGE_SIZE.domain.values:
+        for batch_size in HP_BATCH_SIZE.domain.values:
+            for dense_size in HP_DENSE_SIZE.domain.values:
+                for dropout in HP_DROPOUT.domain.values:
+                    for learning_rate in HP_LEARNING_RATE.domain.values:
                         hparams = {
                             HP_IMAGE_SIZE: image_size,
                             HP_BATCH_SIZE: batch_size,
