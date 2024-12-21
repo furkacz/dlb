@@ -1,0 +1,8 @@
+tensorflow[and-cuda]
+scikit-learn
+tensorrt
+matplotlib
+pandas
+numpy
+psutil
+fastapi[standard]
