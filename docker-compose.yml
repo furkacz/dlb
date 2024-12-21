@@ -1,0 +1,15 @@
+services:
+  api:
+    image: dlb/dlb-api
+    ports:
+      - "8080:8080"
+    volumes:
+      - api:/app/api
+
+  web:
+    image: dlb/dlb-frontend
+    ports:
+      - "80:80"
+    environment:
+      - VUE_APP_API_URL=/api
+      - VUE_APP_API_TIMEOUT=10000
