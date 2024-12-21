@@ -19,3 +19,7 @@
 - ***evaluate.py*** - runs evaluation on best model for train, val and test split, then saves it to .json file
 
 - ***predictions.py*** - generates predictions based on the best model for testset and saves them to .json file
+
+- ***export.py*** - exports all necessary data of selected model for api
+
+- ***api.py*** - simple fastapi app to interact with selected model
