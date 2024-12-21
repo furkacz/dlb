@@ -3,7 +3,6 @@ import os
 import tensorflow as tf
 import pandas as pd
 import numpy as np
-from skmultilearn.model_selection import iterative_train_test_split
 from sklearn.model_selection import train_test_split
 from tensorboard.plugins.hparams import api as hp
 
@@ -91,6 +90,14 @@ def create_model(number_of_classes, hparams):
     return model
 
 
+def get_run_name(run):
+    return f'run-{run}'
+
+
+def get_run_path(run):
+    return os.path.join('runs', get_run_name(run))
+
+
 def get_hparams(run):
     run_count = 0
     for image_size in HP_IMAGE_SIZE.domain.values:
@@ -147,24 +154,6 @@ def split_data(x, y, ratio, random_state=None, merge_train_val=False):
     return (x_train, y_train), (x_val, y_val), (x_test, y_test)
 
 
-def iterative_split_data(x, y, ratio, random_state=None, merge_train_val=False):
-    x_train, y_train, x_test, y_test = iterative_train_test_split(
-        x,
-        y,
-        test_size=ratio,
-    )
-
-    x_test, y_test, x_val, y_val = iterative_train_test_split(
-        x_test, y_test, test_size=0.5
-    )
-
-    if merge_train_val:
-        x_train = np.vstack((x_train, x_val))
-        y_train = np.vstack((y_train, y_val))
-
-    return (x_train, y_train), (x_val, y_val), (x_test, y_test)
-
-
 def load_dataset(name):
     train = pd.read_json(f'{name}/train.json', orient='records')
     val = pd.read_json(f'{name}/val.json', orient='records')
@@ -174,15 +163,10 @@ def load_dataset(name):
     return train, val, test, labels
 
 
-def split_and_save(data, labels, ratio, name, random_state=None, merge_train_val=False, iterative=False):
-    if iterative:
-        train, val, test = iterative_split_data(
-            data, labels, ratio, random_state=random_state, merge_train_val=merge_train_val
-        )
-    else:
-        train, val, test = split_data(
-            data, labels, ratio, random_state=random_state, merge_train_val=merge_train_val
-        )
+def split_and_save(data, labels, ratio, name, random_state=None, merge_train_val=False):
+    train, val, test = split_data(
+        data, labels, ratio, random_state=random_state, merge_train_val=merge_train_val
+    )
 
     train = pd.DataFrame(zip(*train), columns=['id', 'labels'])
     val = pd.DataFrame(zip(*val), columns=['id', 'labels'])

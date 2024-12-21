@@ -4,7 +4,7 @@ import argparse
 from os.path import dirname, join
 import json
 
-from utils import create_model, create_dataset, load_dataset, get_metric_name, get_hparams, LOSS, METRICS
+from utils import create_model, create_dataset, load_dataset, get_metric_name, get_run_path, get_hparams, LOSS, METRICS
 
 
 parser = argparse.ArgumentParser()
@@ -16,7 +16,7 @@ splits = args.splits
 run = args.run
 
 hparams = get_hparams(run)
-run_path = join('runs', f'run-{run}')
+run_path = get_run_path(run)
 
 train, val, test, labels = load_dataset(splits)
 

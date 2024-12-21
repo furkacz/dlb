@@ -10,7 +10,7 @@ import shutil
 import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
 
-from utils import create_model, create_dataset, load_dataset, for_hparams
+from utils import create_model, create_dataset, load_dataset, get_run_name, get_run_path, for_hparams
 
 
 parser = argparse.ArgumentParser()
@@ -36,8 +36,8 @@ if isdir('runs'):
 mkdir('runs')
 
 def training(hparams, run):
-    run_name = f'run-{run}'
-    run_path = join('runs', run_name)
+    run_name = get_run_name(run)
+    run_path = get_run_path(run)
     print(f'--- Starting run: {run_name}')
     print({h.name: hparams[h] for h in hparams})
 
