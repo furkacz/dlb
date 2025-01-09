@@ -23,6 +23,7 @@ HP_DROPOUT = hp.HParam('dropout', hp.Discrete([0.0, 0.1, 0.2, 0.3, 0.4, 0.5]))
 HP_DENSE_SIZE = hp.HParam('dense_size', hp.Discrete([128, 256]))
 HP_LEARNING_RATE = hp.HParam('learning_rate', hp.Discrete([0.0001, 0.0005, 0.001, 0.005]))
 HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([64]))
+HP_OPTIMIZER = hp.HParam('optimizer', hp.Discrete(['adam', 'sgd']))
 
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 LOSS = tf.keras.losses.BinaryCrossentropy()
@@ -81,8 +82,15 @@ def create_model(number_of_classes, hparams):
 
     model.build(input_shape=(None, hparams[HP_IMAGE_SIZE], hparams[HP_IMAGE_SIZE], 3))
 
+    if hparams[HP_OPTIMIZER] == 'adam':
+        optimizer = tf.keras.optimizers.Adam(learning_rate=hparams[HP_LEARNING_RATE])
+    elif hparams[HP_OPTIMIZER] == 'sgd':
+        optimizer = tf.keras.optimizers.SGD(learning_rate=hparams[HP_LEARNING_RATE])
+    else:
+        raise ValueError(f'Undefined optimizer name: {hparams[HP_OPTIMIZER]}')
+
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=hparams[HP_LEARNING_RATE]),
+        optimizer=optimizer,
         loss=LOSS,
         metrics=METRICS
     )
@@ -105,16 +113,18 @@ def get_hparams(run):
             for dense_size in HP_DENSE_SIZE.domain.values:
                 for dropout in HP_DROPOUT.domain.values:
                     for learning_rate in HP_LEARNING_RATE.domain.values:
-                        if run is not None and run_count != run:
-                            run_count += 1
-                            continue
-                        return {
-                            HP_IMAGE_SIZE: image_size,
-                            HP_BATCH_SIZE: batch_size,
-                            HP_DENSE_SIZE: dense_size,
-                            HP_DROPOUT: dropout,
-                            HP_LEARNING_RATE: learning_rate,
-                        }
+                        for optimizer in HP_OPTIMIZER.domain.values:
+                            if run is not None and run_count != run:
+                                run_count += 1
+                                continue
+                            return {
+                                HP_IMAGE_SIZE: image_size,
+                                HP_BATCH_SIZE: batch_size,
+                                HP_DENSE_SIZE: dense_size,
+                                HP_DROPOUT: dropout,
+                                HP_LEARNING_RATE: learning_rate,
+                                HP_OPTIMIZER: optimizer,
+                            }
                         
 
 
@@ -125,17 +135,19 @@ def for_hparams(function):
             for dense_size in HP_DENSE_SIZE.domain.values:
                 for dropout in HP_DROPOUT.domain.values:
                     for learning_rate in HP_LEARNING_RATE.domain.values:
-                        hparams = {
-                            HP_IMAGE_SIZE: image_size,
-                            HP_BATCH_SIZE: batch_size,
-                            HP_DENSE_SIZE: dense_size,
-                            HP_DROPOUT: dropout,
-                            HP_LEARNING_RATE: learning_rate,
-                        }
+                        for optimizer in HP_OPTIMIZER.domain.values:
+                            hparams = {
+                                HP_IMAGE_SIZE: image_size,
+                                HP_BATCH_SIZE: batch_size,
+                                HP_DENSE_SIZE: dense_size,
+                                HP_DROPOUT: dropout,
+                                HP_LEARNING_RATE: learning_rate,
+                                HP_OPTIMIZER: optimizer,
+                            }
 
-                        function(hparams, run_count)
+                            function(hparams, run_count)
 
-                        run_count += 1
+                            run_count += 1
 
 
 
