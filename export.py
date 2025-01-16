@@ -11,7 +11,7 @@ from utils import get_run_path
 parser = argparse.ArgumentParser()
 parser.add_argument('--out', type=str, default='api')
 parser.add_argument('--splits', type=str, default='splits')
-parser.add_argument('--run', type=str, default=0)
+parser.add_argument('--run', type=int, default=0)
 
 args = parser.parse_args()
 splits = args.splits
