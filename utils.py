@@ -18,12 +18,12 @@ def hamming_loss(y_true, y_pred):
     return nonzero / y_true.get_shape()[-1]
 
 
-HP_IMAGE_SIZE = hp.HParam('image_size', hp.Discrete([128, 256]))
-HP_DROPOUT = hp.HParam('dropout', hp.Discrete([0.0, 0.1, 0.2, 0.3, 0.4, 0.5]))
-HP_DENSE_SIZE = hp.HParam('dense_size', hp.Discrete([128, 256]))
-HP_LEARNING_RATE = hp.HParam('learning_rate', hp.Discrete([0.0001, 0.0005, 0.001, 0.005]))
-HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([64]))
-HP_OPTIMIZER = hp.HParam('optimizer', hp.Discrete(['adam', 'sgd']))
+HP_IMAGE_SIZE = hp.HParam("image_size", hp.Discrete([256]))
+HP_DROPOUT = hp.HParam("dropout", hp.Discrete([0.1, 0.2]))
+HP_DENSE_SIZE = hp.HParam("dense_size", hp.Discrete([128, 256]))
+HP_LEARNING_RATE = hp.HParam("learning_rate", hp.Discrete([0.0005, 0.001]))
+HP_BATCH_SIZE = hp.HParam("batch_size", hp.Discrete([256]))
+HP_OPTIMIZER = hp.HParam("optimizer", hp.Discrete(["adam"]))
 
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 LOSS = tf.keras.losses.BinaryCrossentropy()
