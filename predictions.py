@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--splits', type=str, default='splits')
 parser.add_argument('--imagesdir', type=str, default='testset/images')
 parser.add_argument('--truth', type=str, default='testset/truth.json')
-parser.add_argument('--run', type=str, default=0)
+parser.add_argument('--run', type=int, default=0)
 
 args = parser.parse_args()
 splits = args.splits

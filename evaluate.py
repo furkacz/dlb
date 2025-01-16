@@ -9,7 +9,7 @@ from utils import create_model, create_dataset, load_dataset, get_metric_name, g
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--splits', type=str, default='splits')
-parser.add_argument('--run', type=str, default=0)
+parser.add_argument('--run', type=int, default=0)
 
 args = parser.parse_args()
 splits = args.splits
