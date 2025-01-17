@@ -173,3 +173,5 @@ api/*
 !api/README.md
 
 .python-version
+
+/logs
