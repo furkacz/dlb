@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MultiLabelBinarizer
 
-from utils import create_model, create_dataset, get_metric_name, get_metric_value, get_run_path, get_hparams, METRICS
+from utils import create_model, create_dataset, get_metric_name, get_metric_value, get_run_path, get_hparams, LOSS, METRICS
 
 
 parser = argparse.ArgumentParser()
@@ -47,6 +47,6 @@ predicted = mlb.inverse_transform(results)
 with open(join(dirname(truth), 'predicted.json'), 'w') as f:
     json.dump(predicted, f, indent=2)
 
-score = {get_metric_name(metric):float(get_metric_value(metric, truthlabels, results)) for metric in METRICS}
+score = {get_metric_name(metric):float(get_metric_value(metric, truthlabels, results)) for metric in [LOSS] + METRICS}
 with open(join(dirname(truth), 'score.json'), 'w') as f:
     json.dump(score, f, indent=2)

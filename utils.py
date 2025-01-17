@@ -212,10 +212,10 @@ def get_metric_name(metric):
 
 def get_metric_value(metric, y_true, y_pred):
     try:
-        metric.update_state(y_true, y_pred)
-        return np.average(metric.result())
+        return np.average(metric(y_true, y_pred))
     except:
         try:
-            return np.average(metric(y_true, y_pred))
+            metric.update_state(y_true, y_pred)
+            return np.average(metric.result())
         except:
             return -1.0
